@@ -1,6 +1,7 @@
+// frontend/src/pages/ProductDetail.jsx
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import axios from 'axios';
+import { products } from '../data';
 import { useCart } from '../contexts/CartContext';
 
 const ProductDetail = () => {
@@ -15,30 +16,20 @@ const ProductDetail = () => {
     const { addToCart } = useCart();
 
     useEffect(() => {
-        const fetchProduct = async () => {
-            try {
-                const res = await axios.get(`http://localhost:5000/api/products/detail/${id}`);
-                setProduct(res.data);
-                
-                if (res.data.sizes && res.data.sizes.length > 0) {
-                    setSelectedSize(res.data.sizes[0].name);
-                }
-                if (res.data.colors && res.data.colors.length > 0) {
-                    setSelectedColor(res.data.colors[0].name);
-                }
-            } catch (error) {
-                console.error('Ошибка загрузки товара:', error);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchProduct();
+        const foundProduct = products.find(p => p.id === parseInt(id));
+        setProduct(foundProduct);
+        
+        if (foundProduct?.sizes && foundProduct.sizes.length > 0) {
+            setSelectedSize(foundProduct.sizes[0]);
+        }
+        if (foundProduct?.colors && foundProduct.colors.length > 0) {
+            setSelectedColor(foundProduct.colors[0]);
+        }
+        
+        setLoading(false);
     }, [id]);
 
-    // ПРОВЕРКА: является ли товар сертификатом
-    const isCertificate = product?.category_name === 'Сертификаты' || product?.title?.toLowerCase().includes('сертификат');
-    
-    // Для сертификатов не нужна проверка цвета и размера
+    const isCertificate = product?.category_name === 'Сертификаты' || product?.isCertificate === true;
     const isSizeSelected = isCertificate || selectedSize !== '';
     const isColorSelected = isCertificate || selectedColor !== '';
     const canAddToCart = isCertificate || (isSizeSelected && isColorSelected);
@@ -97,7 +88,6 @@ const ProductDetail = () => {
         <div className="bg-gray-50 min-h-screen">
             <div className="container mx-auto px-4 py-16">
                 <div className="flex flex-col lg:flex-row gap-8 bg-white rounded-xl shadow-lg overflow-hidden">
-                    {/* Левая колонка: ФОТО */}
                     <div className="lg:w-1/2">
                         <img 
                             src={product.image_url} 
@@ -106,9 +96,7 @@ const ProductDetail = () => {
                         />
                     </div>
                     
-                    {/* Правая колонка: ИНФОРМАЦИЯ */}
                     <div className="lg:w-1/2 p-6 lg:p-8">
-                        {/* Метка для сертификата */}
                         {isCertificate && (
                             <div className="inline-block bg-burgundy text-white px-3 py-1 rounded-full text-sm font-semibold mb-3">
                                 🎁 Подарочный сертификат
@@ -119,22 +107,28 @@ const ProductDetail = () => {
                         <p className="text-gray-400 text-sm mb-4">Артикул: {product.id}</p>
                         <p className="text-3xl font-bold text-burgundy mb-6">{product.price} ₽</p>
                         
-                        {/* ВЫБОР ЦВЕТА (только для обычных товаров) */}
                         {!isCertificate && colorsFromDB.length > 0 && (
                             <div className="mb-6">
-                                <span className="font-semibold text-gray-700 block mb-3">
-                                    Цвет {!isColorSelected && <span className="text-red-500 text-sm">(обязательно)</span>}
-                                </span>
+                                <span className="font-semibold text-gray-700 block mb-3">Цвет</span>
                                 <div className="flex flex-wrap gap-3">
                                     {colorsFromDB.map(color => (
                                         <button
-                                            key={color.name}
-                                            onClick={() => setSelectedColor(color.name)}
+                                            key={color}
+                                            onClick={() => setSelectedColor(color)}
                                             className={`w-10 h-10 rounded-full border-2 transition ${
-                                                selectedColor === color.name ? 'ring-2 ring-burgundy ring-offset-2' : ''
+                                                selectedColor === color ? 'ring-2 ring-burgundy ring-offset-2' : ''
                                             }`}
-                                            style={{ backgroundColor: color.code || '#ccc' }}
-                                            title={color.name}
+                                            style={{ backgroundColor: 
+                                                color === 'Черный' ? '#000000' :
+                                                color === 'Белый' ? '#FFFFFF' :
+                                                color === 'Серый' ? '#808080' :
+                                                color === 'Красный' ? '#FF0000' :
+                                                color === 'Синий' ? '#0000FF' :
+                                                color === 'Молочный' ? '#FEFCFF' :
+                                                color === 'Розовый' ? '#FF69B4' :
+                                                color === 'Коричневый' ? '#654321' : '#ccc'
+                                            }}
+                                            title={color}
                                         />
                                     ))}
                                 </div>
@@ -142,24 +136,21 @@ const ProductDetail = () => {
                             </div>
                         )}
                         
-                        {/* ВЫБОР РАЗМЕРА (только для обычных товаров) */}
                         {!isCertificate && sizesFromDB.length > 0 && (
                             <div className="mb-6">
-                                <span className="font-semibold text-gray-700 block mb-3">
-                                    Размер {!isSizeSelected && <span className="text-red-500 text-sm">(обязательно)</span>}
-                                </span>
+                                <span className="font-semibold text-gray-700 block mb-3">Размер</span>
                                 <div className="flex flex-wrap gap-3">
                                     {sizesFromDB.map(size => (
                                         <button
-                                            key={size.name}
-                                            onClick={() => setSelectedSize(size.name)}
+                                            key={size}
+                                            onClick={() => setSelectedSize(size)}
                                             className={`min-w-[60px] h-12 px-3 rounded-lg border-2 transition font-medium ${
-                                                selectedSize === size.name 
+                                                selectedSize === size 
                                                     ? 'bg-burgundy text-white border-burgundy' 
                                                     : 'border-gray-300 hover:border-burgundy'
                                             }`}
                                         >
-                                            {size.name}
+                                            {size}
                                         </button>
                                     ))}
                                 </div>
@@ -167,7 +158,6 @@ const ProductDetail = () => {
                             </div>
                         )}
                         
-                        {/* УПРАВЛЕНИЕ КОЛИЧЕСТВОМ */}
                         <div className="mb-6">
                             <span className="font-semibold text-gray-700 block mb-3">Количество</span>
                             <div className="flex items-center gap-3">
@@ -191,7 +181,6 @@ const ProductDetail = () => {
                             </div>
                         </div>
                         
-                        {/* КНОПКА ДОБАВЛЕНИЯ В КОРЗИНУ */}
                         <button
                             onClick={handleAddToCart}
                             disabled={!canAddToCart}
@@ -226,7 +215,6 @@ const ProductDetail = () => {
                             </p>
                         )}
                         
-                        {/* РАСКРЫВАЮЩИЙСЯ СПИСОК: ОПИСАНИЕ */}
                         <div className="border-t pt-4">
                             <button onClick={() => toggleSection('description')} className="w-full flex justify-between items-center py-3 text-left font-semibold text-gray-700">
                                 Описание изделия
@@ -236,12 +224,11 @@ const ProductDetail = () => {
                             </button>
                             {openSection === 'description' && (
                                 <div className="pb-4 text-gray-600 whitespace-pre-line">
-                                    {product.description || 'Описание отсутствует'}
+                                    {product.fullDescription || product.description}
                                 </div>
                             )}
                         </div>
                         
-                        {/* ДОСТАВКА (только для обычных товаров) */}
                         {!isCertificate && (
                             <div className="border-t">
                                 <button onClick={() => toggleSection('delivery')} className="w-full flex justify-between items-center py-3 text-left font-semibold text-gray-700">

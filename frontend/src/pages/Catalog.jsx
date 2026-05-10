@@ -1,12 +1,13 @@
+// frontend/src/pages/Catalog.jsx
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import axios from 'axios';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
+import { products, categories, collections } from '../data';
 
 const Catalog = ({ isMainPage = false }) => {
     const { categorySlug, collectionSlug } = useParams();
-    const [products, setProducts] = useState([]);
+    const [filteredProducts, setFilteredProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedCategory, setSelectedCategory] = useState(categorySlug || 'all');
     const [addedProductId, setAddedProductId] = useState(null);
@@ -15,7 +16,7 @@ const Catalog = ({ isMainPage = false }) => {
     const { cart, addToCart, updateQuantity, removeFromCart } = useCart();
     const { user } = useAuth();
 
-    const categories = [
+    const categoryList = [
         { name: 'Каталог', slug: 'all' },
         { name: 'Худи & Кофты', slug: 'hoodies' },
         { name: 'Штаны & Шорты', slug: 'pants' },
@@ -32,59 +33,40 @@ const Catalog = ({ isMainPage = false }) => {
     // Загрузка избранного
     useEffect(() => {
         if (user) {
-            const fetchFavorites = async () => {
-                try {
-                    const res = await axios.get(`http://localhost:5000/api/favorites/${user.id}`);
-                    setFavorites(res.data.map(f => f.id));
-                } catch (error) {
-                    console.error('Ошибка загрузки избранного:', error);
-                }
-            };
-            fetchFavorites();
+            const savedFavorites = localStorage.getItem(`favorites_${user.id}`);
+            if (savedFavorites) {
+                setFavorites(JSON.parse(savedFavorites));
+            }
         }
     }, [user]);
 
     useEffect(() => {
         if (collectionSlug) {
-            fetchCollection();
+            const foundCollection = collections.find(c => c.slug === collectionSlug);
+            setCollection(foundCollection);
+            const collectionProducts = products.filter(p => p.collection_id === foundCollection?.id);
+            setFilteredProducts(collectionProducts);
+            setLoading(false);
         } else {
             setSelectedCategory(categorySlug || 'all');
         }
     }, [categorySlug, collectionSlug]);
 
-    const fetchCollection = async () => {
-        try {
-            const res = await axios.get(`http://localhost:5000/api/collections/${collectionSlug}`);
-            setCollection(res.data.collection);
-            setProducts(res.data.products);
-            setLoading(false);
-        } catch (error) {
-            console.error('Ошибка загрузки коллекции:', error);
-            setLoading(false);
-        }
-    };
-
     useEffect(() => {
         if (!collectionSlug) {
-            fetchProducts();
-        }
-    }, [selectedCategory, collectionSlug]);
-
-    const fetchProducts = async () => {
-        setLoading(true);
-        try {
-            let url = 'http://localhost:5000/api/products';
+            let filtered = [...products];
+            
             if (selectedCategory && selectedCategory !== 'all') {
-                url = `http://localhost:5000/api/products/category/${selectedCategory}`;
+                const category = categories.find(c => c.slug === selectedCategory);
+                if (category) {
+                    filtered = products.filter(p => p.category_id === category.id);
+                }
             }
-            const response = await axios.get(url);
-            setProducts(response.data);
-        } catch (error) {
-            console.error('Ошибка загрузки товаров:', error);
-        } finally {
+            
+            setFilteredProducts(filtered);
             setLoading(false);
         }
-    };
+    }, [selectedCategory, collectionSlug]);
 
     const handleAddToCart = (product) => {
         addToCart(product, 1);
@@ -103,24 +85,22 @@ const Catalog = ({ isMainPage = false }) => {
         }
     };
 
-    // Добавление/удаление из избранного
-    const toggleFavorite = async (productId, e) => {
-        e.preventDefault(); // Останавливаем переход по ссылке
+    const toggleFavorite = (productId, e) => {
+        e.preventDefault();
         e.stopPropagation();
         if (!user) {
             alert('Войдите в аккаунт, чтобы добавлять товары в избранное');
             return;
         }
-        try {
-            await axios.post('http://localhost:5000/api/favorites/toggle', { userId: user.id, productId });
-            if (favorites.includes(productId)) {
-                setFavorites(prev => prev.filter(id => id !== productId));
-            } else {
-                setFavorites(prev => [...prev, productId]);
-            }
-        } catch (error) {
-            console.error('Ошибка:', error);
+        
+        let newFavorites;
+        if (favorites.includes(productId)) {
+            newFavorites = favorites.filter(id => id !== productId);
+        } else {
+            newFavorites = [...favorites, productId];
         }
+        setFavorites(newFavorites);
+        localStorage.setItem(`favorites_${user.id}`, JSON.stringify(newFavorites));
     };
 
     if (loading) {
@@ -133,24 +113,23 @@ const Catalog = ({ isMainPage = false }) => {
         );
     }
 
-    // Если это страница коллекции, показываем баннер коллекции
+    // Если это страница коллекции
     if (collectionSlug && collection) {
         return (
             <div className="bg-gray-50 min-h-screen">
-                {/* Баннер коллекции */}
-                <div className="relative h-96 bg-cover bg-center" style={{ backgroundImage: `url(${collection.image_url || 'https://via.placeholder.com/1920x400'})` }}>
+                <div className="relative h-96 bg-cover bg-center" style={{ backgroundImage: `url(${collection.image_url})` }}>
                     <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
                         <div className="text-center text-white">
-                            <h1 className="text-5xl font-playfair font-bold mb-4">{collection.hero_title || collection.title}</h1>
+                            <h1 className="text-5xl font-playfair font-bold mb-4">{collection.hero_title}</h1>
                             <p className="text-xl mb-6">{collection.release_date}</p>
-                            <p className="max-w-2xl mx-auto">{collection.description}</p>
+                            <p className="max-w-2xl mx-auto whitespace-pre-line">{collection.description}</p>
                         </div>
                     </div>
                 </div>
                 <div className="container mx-auto px-4 py-8">
                     <h2 className="text-3xl font-playfair font-bold text-burgundy mb-6">Товары коллекции</h2>
                     <CatalogProducts 
-                        products={products} 
+                        products={filteredProducts} 
                         favorites={favorites}
                         getQuantity={getQuantity}
                         handleAddToCart={handleAddToCart}
@@ -167,13 +146,12 @@ const Catalog = ({ isMainPage = false }) => {
         <div className="bg-gray-50 min-h-screen">
             <div className="container mx-auto px-4 py-8">
                 <h1 className="text-4xl font-playfair font-bold text-burgundy mb-2">
-                    {categories.find(c => c.slug === selectedCategory)?.name || 'Каталог'}
+                    {categoryList.find(c => c.slug === selectedCategory)?.name || 'Каталог'}
                 </h1>
                 <p className="text-gray-500 mb-8 font-poppins">Выберите идеальный образ вместе с CherryStyle</p>
 
-                {/* Кнопки категорий */}
                 <div className="flex flex-wrap gap-3 mb-8">
-                    {categories.map(cat => (
+                    {categoryList.map(cat => (
                         <button
                             key={cat.slug}
                             onClick={() => setSelectedCategory(cat.slug)}
@@ -189,7 +167,7 @@ const Catalog = ({ isMainPage = false }) => {
                 </div>
 
                 <CatalogProducts 
-                    products={products} 
+                    products={filteredProducts} 
                     favorites={favorites}
                     getQuantity={getQuantity}
                     handleAddToCart={handleAddToCart}
@@ -202,7 +180,6 @@ const Catalog = ({ isMainPage = false }) => {
     );
 };
 
-// Компонент для отображения товаров (чтобы не дублировать код)
 const CatalogProducts = ({ products, favorites, getQuantity, handleAddToCart, handleQuantityChange, toggleFavorite, addedProductId }) => {
     if (products.length === 0) {
         return (
@@ -221,22 +198,20 @@ const CatalogProducts = ({ products, favorites, getQuantity, handleAddToCart, ha
                 
                 return (
                     <Link to={`/product/${product.id}`} key={product.id} className="block bg-white rounded-xl shadow-md overflow-hidden card-hover flex flex-col h-full relative group">
-                        {/* Кнопка избранного (сердечко) */}
                         <button
                             onClick={(e) => toggleFavorite(product.id, e)}
-                            className="absolute top-3 right-3 z-10 bg-white rounded-full p-2 shadow-md hover:scale-110 transition z-20"
+                            className="absolute top-3 right-3 z-10 bg-white rounded-full p-2 shadow-md hover:scale-110 transition"
                         >
                             <svg className={`w-5 h-5 transition ${isFavorite ? 'text-red-500 fill-red-500' : 'text-gray-400 hover:text-red-400'}`} fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
                             </svg>
                         </button>
 
-                        
                         <div className="relative overflow-hidden h-92">
                             <img 
                                 src={product.image_url} 
                                 alt={product.title}
-                                className="w-full h-full object-cover transition duration-500 group-hover:scale-105"
+                                className="w-full h-full object-cover transition duration-500 hover:scale-105"
                             />
                         </div>
                         <div className="p-4 flex flex-col flex-grow">
